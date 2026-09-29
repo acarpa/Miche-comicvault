@@ -1,0 +1,12 @@
+# dipendenze e file generati
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.log
+.DS_Store
+
+# cartelle native generate da "expo prebuild"
+/android
+/ios
