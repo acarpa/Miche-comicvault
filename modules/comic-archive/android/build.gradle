@@ -20,5 +20,6 @@ android {
 dependencies {
   // libarchive per Android: legge ZIP/CBZ, RAR/CBR (anche RAR5), 7Z/CB7, TAR/CBT.
   // È la stessa libreria usata da Mihon (lettore manga open source).
-  implementation 'me.zhanghai.android.libarchive:library:1.1.7'
+  // 1.1.6: la 1.1.7 richiede compileSdk 37, non ancora supportato da Expo SDK 57.
+  implementation 'me.zhanghai.android.libarchive:library:1.1.6'
 }
