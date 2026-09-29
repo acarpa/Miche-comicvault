@@ -7,6 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ActionSheet } from '@/components/ActionSheet';
+import { BlackoutOverlay } from '@/components/BlackoutOverlay';
+import { HeroOverlay } from '@/components/HeroOverlay';
 import { LockScreen } from '@/components/LockScreen';
 import { Snackbar } from '@/components/Snackbar';
 import { useAppLock } from '@/hooks/useAppLock';
@@ -57,20 +59,24 @@ function Root() {
   return (
     <ThemeProvider value={navTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="index" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: 'slide_from_right' }}>
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="reader/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#000' } }} />
+        <Stack.Screen name="media/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: '#000' } }} />
         <Stack.Screen name="comic/[id]" />
-        <Stack.Screen name="settings" />
+        <Stack.Screen name="series/[name]" />
         <Stack.Screen name="backup" />
         <Stack.Screen name="pin-setup" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
 
       <Snackbar />
       <ActionSheet />
+      <HeroOverlay />
 
-      {/* Il blocco copre tutto; finché le impostazioni non sono lette si mostra solo lo sfondo. */}
+      {/* Il blocco copre tutto; lo schermo nero dell'antipanico copre anche il blocco. */}
       {locked ? <LockScreen /> : null}
+      <BlackoutOverlay />
+      {/* Finché le impostazioni non sono lette si mostra solo lo sfondo. */}
       {!ready ? <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} /> : null}
     </ThemeProvider>
   );

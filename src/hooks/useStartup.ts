@@ -2,7 +2,9 @@ import { useIncomingShare } from 'expo-sharing';
 import { useEffect, useState } from 'react';
 
 import { importFromOtherApp } from '@/hooks/useComicActions';
+import { cleanupVaultTemp } from '@/lib/vault';
 import { useLibrary } from '@/store/useLibrary';
+import { useMedia } from '@/store/useMedia';
 import { useLock } from '@/store/useLock';
 import { useSettings } from '@/store/useSettings';
 
@@ -28,10 +30,14 @@ export function useSettingsReady(): boolean {
   return ready;
 }
 
-/** Carica la libreria dal database all'avvio. */
+/** Carica libreria e media dal database all'avvio e pulisce i file temporanei. */
 export function useLibraryLoader() {
   useEffect(() => {
     void useLibrary.getState().load();
+    void useMedia.getState().load();
+    // Dopo qualche secondo, con calma: backup condivisi e ripristini interrotti.
+    const t = setTimeout(cleanupVaultTemp, 5000);
+    return () => clearTimeout(t);
   }, []);
 }
 

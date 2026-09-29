@@ -1,7 +1,7 @@
 import { Directory } from 'expo-file-system';
 import { create } from 'zustand';
 
-import { deleteAllRows, deleteComicRow, listComics, updateComic, type ComicPatch } from '@/lib/db';
+import { deleteAllRows, deleteComicRow, listComics, summaryOf, updateComic, type ComicPatch } from '@/lib/db';
 import { comicDir, comicsRoot, lastSegment } from '@/lib/paths';
 import type { ComicSummary } from '@/types';
 
@@ -35,25 +35,9 @@ export const useLibrary = create<LibraryState>()((set, get) => ({
   },
 
   add: (comic) => {
-    // Rimuovi i campi extra (es. l'elenco pagine) per tenere leggera la lista.
-    const { id, title, fileName, format, pageCount, sizeBytes, addedAt, lastReadAt, currentPage, completed, favorite, readingMode, cover } =
-      comic;
-    const summary: ComicSummary = {
-      id,
-      title,
-      fileName,
-      format,
-      pageCount,
-      sizeBytes,
-      addedAt,
-      lastReadAt,
-      currentPage,
-      completed,
-      favorite,
-      readingMode,
-      cover,
-    };
-    set((s) => ({ comics: [summary, ...s.comics.filter((c) => c.id !== id)] }));
+    // Senza l'elenco delle pagine, per tenere leggera la lista.
+    const summary = summaryOf(comic);
+    set((s) => ({ comics: [summary, ...s.comics.filter((c) => c.id !== comic.id)] }));
   },
 
   update: async (id, patch) => {

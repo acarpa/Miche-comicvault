@@ -1,24 +1,28 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { Card, Divider, Row, SectionLabel, Segmented, SwitchRow } from '@/components/ui';
+import { Card, Divider, IconButton, Row, SectionLabel, Segmented, SwitchRow } from '@/components/ui';
 import { formatBytes, formatRelative } from '@/lib/format';
+import { hapticSuccess } from '@/lib/haptics';
+import { panic } from '@/lib/panic';
 import { biometricAvailable } from '@/lib/security';
 import { totalSize } from '@/lib/selectors';
+import { APP_VERSION } from '@/lib/vault';
 import { useLibrary } from '@/store/useLibrary';
+import { useMedia } from '@/store/useMedia';
 import { useSettings } from '@/store/useSettings';
 import { useUi } from '@/store/useUi';
 import { spacing, useTheme } from '@/theme';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const s = useSettings();
   const comics = useLibrary((st) => st.comics);
+  const media = useMedia((st) => st.items);
   const size = useMemo(() => totalSize(comics), [comics]);
+  const mediaSize = useMemo(() => media.reduce((n, m) => n + m.sizeBytes, 0), [media]);
   const [bioAvailable, setBioAvailable] = useState(false);
 
   useEffect(() => {
@@ -42,10 +46,27 @@ export default function SettingsScreen() {
       ],
     );
 
+  const confirmDeleteMedia = () =>
+    Alert.alert('Eliminare tutti i media?', `Verranno cancellati ${media.length} tra GIF, foto e video.`, [
+      { text: 'Annulla', style: 'cancel' },
+      {
+        text: 'Elimina tutto',
+        style: 'destructive',
+        onPress: () => {
+          void useMedia.getState().removeAll();
+          useUi.getState().showSnackbar({ message: 'Media eliminati' });
+        },
+      },
+    ]);
+
   return (
     <View style={[styles.flex, { backgroundColor: colors.background }]}>
-      <ScreenHeader back title="Impostazioni" />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
+      <ScreenHeader
+        large
+        title="Impostazioni"
+        right={<IconButton icon="eye-off-outline" label="Pulsante antipanico" onPress={panic} />}
+      />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 }]}>
         <SectionLabel icon="color-palette-outline">Aspetto</SectionLabel>
         <Card>
           <Text style={[styles.label, { color: colors.text }]}>Tema</Text>
@@ -95,11 +116,26 @@ export default function SettingsScreen() {
           <Divider />
           <SwitchRow icon="sunny-outline" title="Schermo sempre acceso" value={s.keepAwake} onChange={(keepAwake) => s.set({ keepAwake })} />
           <Divider />
+          <Text style={[styles.label, { color: colors.text }]}>Avanzamento durante la lettura</Text>
+          <Segmented
+            value={s.progressStyle}
+            onChange={(progressStyle) => s.set({ progressStyle })}
+            options={[
+              { value: 'pill', label: 'Numero' },
+              { value: 'line', label: 'Linea' },
+              { value: 'none', label: 'Niente' },
+            ]}
+          />
+          <Divider />
           <SwitchRow
-            icon="document-text-outline"
-            title="Mostra il numero di pagina"
-            value={s.showPageNumber}
-            onChange={(showPageNumber) => s.set({ showPageNumber })}
+            icon="pulse-outline"
+            title="Vibrazioni leggere"
+            subtitle="Preferiti, fine del capitolo, menu e schede"
+            value={s.haptics}
+            onChange={(haptics) => {
+              s.set({ haptics });
+              if (haptics) hapticSuccess();
+            }}
           />
         </Card>
 
@@ -158,16 +194,19 @@ export default function SettingsScreen() {
             value={s.panicAction}
             onChange={(panicAction) => s.set({ panicAction })}
             options={[
+              { value: 'blackout', label: 'Schermo nero' },
               { value: 'lock', label: 'Blocca' },
-              { value: 'lockAndExit', label: 'Blocca ed esci' },
+              { value: 'lockAndExit', label: 'Esci' },
             ]}
           />
           <Text style={[styles.help, { color: colors.textMuted }]}>
-            {s.pinEnabled
-              ? s.panicAction === 'lock'
-                ? 'Mostra subito la schermata del PIN.'
-                : "Mostra la schermata del PIN e chiude l'app."
-              : "Senza PIN il pulsante chiude semplicemente l'app."}
+            {s.panicAction === 'blackout'
+              ? `Lo schermo diventa subito tutto nero. Per tornare tieni premuto lo schermo per 2 secondi${s.pinEnabled ? ', poi inserisci il PIN' : ''}.`
+              : s.panicAction === 'lock'
+                ? s.pinEnabled
+                  ? 'Mostra subito la schermata del PIN.'
+                  : 'Senza PIN lo schermo diventa nero (tieni premuto 2 secondi per tornare).'
+                : `Chiude subito l'app${s.pinEnabled ? ' e alla riapertura chiede il PIN' : ''}.`}
           </Text>
         </Card>
 
@@ -180,14 +219,20 @@ export default function SettingsScreen() {
             onPress={() => router.push('/backup')}
           />
           <Divider />
-          <Row icon="pie-chart-outline" title="Spazio occupato" subtitle={`${comics.length} fumetti · ${formatBytes(size)}`} />
+          <Row
+            icon="pie-chart-outline"
+            title="Spazio occupato"
+            subtitle={`${comics.length} fumetti · ${formatBytes(size)}\n${media.length} media · ${formatBytes(mediaSize)}`}
+          />
           <Divider />
           <Row icon="trash-outline" title="Elimina tutta la libreria" destructive disabled={comics.length === 0} onPress={confirmDeleteAll} />
+          <Divider />
+          <Row icon="trash-outline" title="Elimina tutti i media" destructive disabled={media.length === 0} onPress={confirmDeleteMedia} />
         </Card>
 
         <View style={styles.about}>
           <Text style={[styles.help, { color: colors.textMuted, textAlign: 'center' }]}>
-            ComicVault legge CBZ, CBR (anche RAR5), CB7, CBT, ZIP, RAR e 7Z.{'\n'}
+            ComicVault {APP_VERSION} · legge CBZ, CBR (anche RAR5), CB7, CBT, ZIP, RAR, 7Z, PDF e cartelle di immagini.{'\n'}
             Tutto resta su questo telefono: nessun account, nessun server.
           </Text>
         </View>

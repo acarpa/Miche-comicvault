@@ -1,8 +1,7 @@
 /**
- * Backup, ripristino ed esportazione. Tutto su file che scegli tu:
- * - un backup è una cartella con un .cbz per ogni fumetto + "comicvault-library.json"
- *   (titoli, pagine lette, preferiti). La puoi copiare su PC, chiavetta o nuovo telefono.
- * - il ripristino legge quella cartella e reimporta ciò che manca.
+ * Esportazione di un singolo fumetto (.cbz) e ripristino dei vecchi backup "a cartella"
+ * (versione 1: un .cbz per fumetto + "comicvault-library.json") o di una cartella qualsiasi di fumetti.
+ * Il backup completo nuovo (.comicvault) è in vault.ts.
  */
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -34,15 +33,7 @@ export async function pickFolder(): Promise<Directory | null> {
   }
 }
 
-function uniqueName(base: string, used: Set<string>): string {
-  let name = `${base}.cbz`;
-  let n = 2;
-  while (used.has(name.toLowerCase())) name = `${base} (${n++}).cbz`;
-  used.add(name.toLowerCase());
-  return name;
-}
-
-function stamp(d = new Date()): string {
+export function stamp(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}`;
 }
@@ -77,51 +68,10 @@ export async function saveComicToFolder(comic: ComicSummary): Promise<string | n
   return name;
 }
 
-// ---------------------------------------------------------------------------
-// Backup completo
-// ---------------------------------------------------------------------------
-
 export interface Progress {
   done: number;
   total: number;
   current: string;
-}
-
-export async function exportLibrary(
-  comics: ComicSummary[],
-  onProgress: (p: Progress) => void,
-  isCanceled: () => boolean,
-): Promise<{ folderName: string; count: number } | null> {
-  const parent = await pickFolder();
-  if (!parent) return null;
-  const folderName = `ComicVault backup ${stamp()}`;
-  const folder = parent.createDirectory(folderName);
-
-  const used = new Set<string>();
-  const entries: BackupEntry[] = [];
-  for (let i = 0; i < comics.length; i++) {
-    if (isCanceled()) throw new CanceledError();
-    const c = comics[i];
-    onProgress({ done: i, total: comics.length, current: c.title });
-    const name = uniqueName(safeFileName(c.title, c.id), used);
-    const target = folder.createFile(name, CBZ_MIME);
-    await ComicArchive.writeCbz(comicDir(c.id).uri, await pageNames(c.id), target.uri);
-    entries.push({
-      file: name,
-      title: c.title,
-      fileName: c.fileName,
-      addedAt: c.addedAt,
-      lastReadAt: c.lastReadAt,
-      currentPage: c.currentPage,
-      completed: c.completed,
-      favorite: c.favorite,
-      readingMode: c.readingMode,
-    });
-  }
-  const manifest: BackupManifest = { app: 'comicvault', format: 1, exportedAt: new Date().toISOString(), comics: entries };
-  folder.createFile(MANIFEST_NAME, 'application/json').write(JSON.stringify(manifest, null, 2));
-  onProgress({ done: comics.length, total: comics.length, current: '' });
-  return { folderName, count: comics.length };
 }
 
 // ---------------------------------------------------------------------------

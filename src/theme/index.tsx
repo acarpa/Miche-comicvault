@@ -7,6 +7,8 @@ export interface Palette {
   background: string;
   surface: string;
   surfaceAlt: string;
+  /** Superficie in rilievo (fogli, barra delle schede). */
+  elevated: string;
   text: string;
   textMuted: string;
   textFaint: string;
@@ -14,44 +16,65 @@ export interface Palette {
   primary: string;
   primarySoft: string;
   onPrimary: string;
+  /** Secondo accento (preferiti, GIF). */
+  accent: string;
+  accentSoft: string;
+  /** Terzo accento (video, informazioni). */
+  info: string;
   danger: string;
   success: string;
   warning: string;
   overlay: string;
+  /** Scheletri di caricamento. */
+  skeleton: string;
+  skeletonHighlight: string;
 }
 
+/** Tema scuro: base #130c1f (viola notte) con accenti viola, rosa e azzurro. */
 const dark: Palette = {
-  background: '#0E0E11',
-  surface: '#18181D',
-  surfaceAlt: '#24242B',
-  text: '#F4F4F6',
-  textMuted: '#A3A3AE',
-  textFaint: '#63636E',
-  border: '#2C2C35',
-  primary: '#FF7A45',
-  primarySoft: '#3A2219',
-  onPrimary: '#1A0E08',
-  danger: '#FF5C5C',
-  success: '#3DD68C',
-  warning: '#FFC53D',
-  overlay: 'rgba(0,0,0,0.6)',
+  background: '#130C1F',
+  surface: '#1C132D',
+  surfaceAlt: '#281D3D',
+  elevated: '#21172F',
+  text: '#F4EFFF',
+  textMuted: '#AC9FC6',
+  textFaint: '#6F628A',
+  border: '#33264B',
+  primary: '#A874FF',
+  primarySoft: '#2D1F4A',
+  onPrimary: '#150A28',
+  accent: '#FF5FA2',
+  accentSoft: '#3A1830',
+  info: '#5CCBFF',
+  danger: '#FF5C7A',
+  success: '#45D99A',
+  warning: '#FFC857',
+  overlay: 'rgba(7,3,14,0.72)',
+  skeleton: '#241A37',
+  skeletonHighlight: '#33264D',
 };
 
 const light: Palette = {
-  background: '#F6F5F2',
+  background: '#F7F4FC',
   surface: '#FFFFFF',
-  surfaceAlt: '#ECEBE6',
-  text: '#18181B',
-  textMuted: '#696972',
-  textFaint: '#A1A1AA',
-  border: '#E2E1DC',
-  primary: '#E2582A',
-  primarySoft: '#FCE7DE',
+  surfaceAlt: '#EDE7F7',
+  elevated: '#FFFFFF',
+  text: '#1B1228',
+  textMuted: '#6B5F80',
+  textFaint: '#A79CB9',
+  border: '#E3DCEF',
+  primary: '#7C3AED',
+  primarySoft: '#EFE6FF',
   onPrimary: '#FFFFFF',
+  accent: '#E0337E',
+  accentSoft: '#FDE4EF',
+  info: '#0A8BC7',
   danger: '#E5484D',
   success: '#2F9E6A',
-  warning: '#D99A00',
-  overlay: 'rgba(10,10,20,0.4)',
+  warning: '#C98A00',
+  overlay: 'rgba(20,10,35,0.45)',
+  skeleton: '#E9E2F4',
+  skeletonHighlight: '#F5F1FA',
 };
 
 interface ThemeValue {
@@ -75,3 +98,6 @@ export const useTheme = () => useContext(ThemeContext);
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 export const radius = { sm: 8, md: 14, lg: 20, pill: 999 } as const;
+
+/** Altezza della barra delle schede (serve per lasciare spazio a liste e pulsanti). */
+export const TAB_BAR_HEIGHT = 64;

@@ -4,16 +4,59 @@ export function createId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
-const COMIC_EXTENSIONS = /\.(cbz|cbr|cb7|cbt|zip|rar|7z|tar)$/i;
+const COMIC_EXTENSIONS = /\.(cbz|cbr|cb7|cbt|zip|rar|7z|tar|pdf)$/i;
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|bmp|heic|heif|avif)$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|m4v|mov|webm|mkv|3gp|avi)$/i;
 
 export function isComicFileName(name: string): boolean {
   return COMIC_EXTENSIONS.test(name);
 }
 
+/** Pagina di un fumetto in una cartella di immagini (le GIF valgono come pagine). */
+export function isImageFileName(name: string): boolean {
+  return IMAGE_EXTENSIONS.test(name) || /\.gif$/i.test(name);
+}
+
+/** Tipo di media dal nome del file (null = non è un media). */
+export function mediaKindFromName(name: string): 'gif' | 'image' | 'video' | null {
+  if (/\.gif$/i.test(name)) return 'gif';
+  if (IMAGE_EXTENSIONS.test(name)) return 'image';
+  if (VIDEO_EXTENSIONS.test(name)) return 'video';
+  return null;
+}
+
+/** File di backup di ComicVault. */
+export function isVaultFileName(name: string): boolean {
+  return /\.comicvault$/i.test(name.trim());
+}
+
+/** Estensione in minuscolo senza punto ("" se manca). */
+export function extensionOf(name: string): string {
+  const m = /\.([a-z0-9]{1,5})$/i.exec(name.trim());
+  return m ? m[1].toLowerCase() : '';
+}
+
+/** "1:05", "12:30", "1:02:03" */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0:00';
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+/** "12", "12,5" (capitoli con decimali) */
+export function formatChapter(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return '';
+  return Number.isInteger(n) ? String(n) : String(n).replace('.', ',');
+}
+
 /** "Batman_-_Year_One_01.cbz" -> "Batman - Year One 01" */
 export function titleFromFileName(fileName: string): string {
   const base = fileName.split(/[\\/]/).pop() ?? fileName;
-  const noExt = base.replace(COMIC_EXTENSIONS, '');
+  const noExt = base.replace(COMIC_EXTENSIONS, '').replace(VIDEO_EXTENSIONS, '').replace(IMAGE_EXTENSIONS, '').replace(/\.gif$/i, '');
   const cleaned = noExt
     .replace(/_/g, ' ')
     .replace(/\s{2,}/g, ' ')
@@ -81,6 +124,14 @@ export function naturalCompare(a: string, b: string): number {
   const rest = x.length - i - (y.length - j);
   if (rest !== 0) return rest;
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** "29 set 2026, 08:15" */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** Percentuale di lettura (0-100). */

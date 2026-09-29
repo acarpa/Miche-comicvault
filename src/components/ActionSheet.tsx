@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { hapticSelect } from '@/lib/haptics';
 import { useUi } from '@/store/useUi';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -36,6 +37,7 @@ export function ActionSheet() {
                 <Pressable
                   key={opt.label}
                   onPress={() => {
+                    hapticSelect();
                     hide();
                     setTimeout(opt.onPress, 120);
                   }}

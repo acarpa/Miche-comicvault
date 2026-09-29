@@ -1,33 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  useWindowDimensions,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { ComicCard } from '@/components/ComicCard';
+import { ComicCard, type HeroStart } from '@/components/ComicCard';
 import { EmptyState } from '@/components/EmptyState';
 import { ImportBanner } from '@/components/ImportBanner';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { Chip, IconButton, PrimaryButton } from '@/components/ui';
-import { openComicMenu, openReader, pickAndImport } from '@/hooks/useComicActions';
+import { SearchBar } from '@/components/SearchBar';
+import { SkeletonCard, SkeletonGrid } from '@/components/Skeleton';
+import { Chip, Fab, IconButton, PrimaryButton } from '@/components/ui';
+import { openAddMenu, openComicMenu, openReader } from '@/hooks/useComicActions';
 import { formatBytes } from '@/lib/format';
+import { hapticSelect } from '@/lib/haptics';
 import { panic } from '@/lib/panic';
 import { continueReading, countByFilter, totalSize, visibleComics } from '@/lib/selectors';
+import { allAuthors, allTags } from '@/lib/series';
+import { useImport } from '@/store/useImport';
 import { useLibrary } from '@/store/useLibrary';
 import { useSettings } from '@/store/useSettings';
 import { useUi } from '@/store/useUi';
-import { radius, spacing, useTheme } from '@/theme';
+import { spacing, useTheme } from '@/theme';
 import type { ComicSummary, LibraryFilter, LibrarySort } from '@/types';
 
 const FILTERS: { value: LibraryFilter; label: string }[] = [
@@ -42,88 +34,85 @@ const SORTS: { value: LibrarySort; label: string }[] = [
   { value: 'recent', label: 'Letti di recente' },
   { value: 'added', label: 'Aggiunti di recente' },
   { value: 'title', label: 'Titolo (A-Z)' },
+  { value: 'series', label: 'Serie e capitolo' },
 ];
 
 const PAD = spacing.lg;
 const GAP = 12;
 
-/** Libreria: "Continua a leggere", filtri, ricerca e griglia delle copertine. */
+/** Libreria: ricerca istantanea, "Continua a leggere", filtri (stato, tag, autore) e griglia delle copertine. */
 export default function LibraryScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const comics = useLibrary((s) => s.comics);
   const loaded = useLibrary((s) => s.loaded);
   const error = useLibrary((s) => s.error);
+  const importing = useImport((s) => s.running);
   const filter = useSettings((s) => s.filter);
   const sort = useSettings((s) => s.sort);
   const gridColumns = useSettings((s) => s.gridColumns);
   const setSettings = useSettings((s) => s.set);
   const [query, setQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchRef = useRef<TextInput>(null);
+  const [tag, setTag] = useState<string | null>(null);
+  const [author, setAuthor] = useState<string | null>(null);
 
   // Su tablet o in orizzontale ci stanno più copertine per riga.
   const columns = width >= 900 ? gridColumns + 3 : width >= 600 ? gridColumns + 1 : gridColumns;
   const cardWidth = Math.floor((width - PAD * 2 - GAP * (columns - 1)) / columns);
 
-  const visible = useMemo(() => visibleComics(comics, { filter, sort, query }), [comics, filter, sort, query]);
+  const visible = useMemo(
+    () => visibleComics(comics, { filter, sort, query, tag, author }),
+    [comics, filter, sort, query, tag, author],
+  );
   const counts = useMemo(() => countByFilter(comics), [comics]);
   const reading = useMemo(() => continueReading(comics), [comics]);
   const size = useMemo(() => totalSize(comics), [comics]);
-  const showContinue = filter === 'all' && !query.trim() && reading.length > 0;
+  const tags = useMemo(() => allTags(comics), [comics]);
+  const authors = useMemo(() => allAuthors(comics), [comics]);
+  const narrowed = !!query.trim() || !!tag || !!author;
+  const showContinue = filter === 'all' && !narrowed && reading.length > 0;
 
-  const onPress = useCallback((c: ComicSummary) => openReader(c.id), []);
+  // Mentre si importa, una copertina "scheletro" in cima alla griglia.
+  const data: (ComicSummary | null)[] = useMemo(() => (importing && !narrowed ? [null, ...visible] : visible), [importing, narrowed, visible]);
+
+  const onPress = useCallback((c: ComicSummary, hero: HeroStart) => openReader(c.id, hero), []);
   const onLongPress = useCallback((c: ComicSummary) => openComicMenu(c), []);
-
-  const importFiles = () => {
-    pickAndImport().catch((e) => Alert.alert('Importazione non riuscita', e instanceof Error ? e.message : String(e)));
-  };
-
-  const toggleSearch = () => {
-    if (searchOpen) {
-      setQuery('');
-      setSearchOpen(false);
-    } else {
-      setSearchOpen(true);
-      setTimeout(() => searchRef.current?.focus(), 100);
-    }
-  };
 
   const chooseSort = () =>
     useUi.getState().showActionSheet({
       title: 'Ordina per',
       options: SORTS.map((s) => ({
         label: s.label,
-        icon: s.value === 'title' ? 'text-outline' : s.value === 'added' ? 'add-circle-outline' : 'time-outline',
+        icon:
+          s.value === 'title'
+            ? 'text-outline'
+            : s.value === 'added'
+              ? 'add-circle-outline'
+              : s.value === 'series'
+                ? 'albums-outline'
+                : 'time-outline',
         selected: s.value === sort,
         onPress: () => setSettings({ sort: s.value }),
       })),
     });
 
+  const chooseAuthor = () =>
+    useUi.getState().showActionSheet({
+      title: 'Filtra per autore',
+      options: [
+        { label: 'Tutti gli autori', icon: 'people-outline', selected: !author, onPress: () => setAuthor(null) },
+        ...authors.map((a) => ({
+          label: `${a.value} (${a.count})`,
+          icon: 'person-outline' as const,
+          selected: author?.toLowerCase() === a.value.toLowerCase(),
+          onPress: () => setAuthor(a.value),
+        })),
+      ],
+    });
+
   const header = (
     <View style={styles.headerContent}>
-      {searchOpen ? (
-        <View style={[styles.search, { backgroundColor: colors.surface }]}>
-          <Ionicons name="search" size={18} color={colors.textFaint} />
-          <TextInput
-            ref={searchRef}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Cerca per titolo o nome file"
-            placeholderTextColor={colors.textFaint}
-            style={[styles.searchInput, { color: colors.text }]}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          {query ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={10}>
-              <Ionicons name="close-circle" size={18} color={colors.textFaint} />
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
+      <SearchBar value={query} onChange={setQuery} placeholder="Cerca titolo, serie, autore o #tag" />
       <ImportBanner />
 
       {showContinue ? (
@@ -135,9 +124,7 @@ export default function LibraryScreen() {
             keyExtractor={(c) => c.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.continueList}
-            renderItem={({ item }) => (
-              <ComicCard comic={item} width={110} onPress={onPress} onLongPress={onLongPress} />
-            )}
+            renderItem={({ item }) => <ComicCard comic={item} width={112} onPress={onPress} onLongPress={onLongPress} />}
           />
         </View>
       ) : null}
@@ -150,10 +137,36 @@ export default function LibraryScreen() {
                 key={f.value}
                 label={`${f.label} ${counts[f.value]}`}
                 selected={filter === f.value}
-                onPress={() => setSettings({ filter: f.value })}
+                onPress={() => {
+                  hapticSelect();
+                  setSettings({ filter: f.value });
+                }}
               />
             ))}
           </ScrollView>
+
+          {tags.length > 0 || authors.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {authors.length > 0 ? (
+                <Chip icon="person-outline" label={author ?? 'Autore'} selected={!!author} onPress={chooseAuthor} />
+              ) : null}
+              {tags.map((t) => {
+                const active = tag?.toLowerCase() === t.value.toLowerCase();
+                return (
+                  <Chip
+                    key={t.value}
+                    label={`#${t.value}`}
+                    selected={active}
+                    onPress={() => {
+                      hapticSelect();
+                      setTag(active ? null : t.value);
+                    }}
+                  />
+                );
+              })}
+            </ScrollView>
+          ) : null}
+
           <View style={styles.sortRow}>
             <Text style={[styles.count, { color: colors.textMuted }]}>
               {visible.length === 1 ? '1 fumetto' : `${visible.length} fumetti`}
@@ -172,32 +185,33 @@ export default function LibraryScreen() {
     <View style={[styles.flex, { backgroundColor: colors.background }]}>
       <ScreenHeader
         large
-        title="ComicVault"
+        title="Libreria"
         subtitle={comics.length ? `${comics.length} fumetti · ${formatBytes(size)}` : 'La tua libreria privata'}
-        right={
-          <>
-            <IconButton icon={searchOpen ? 'close' : 'search'} label="Cerca" active={searchOpen} onPress={toggleSearch} />
-            <IconButton icon="eye-off-outline" label="Pulsante antipanico" onPress={panic} />
-            <IconButton icon="settings-outline" label="Impostazioni" onPress={() => router.push('/settings')} />
-          </>
-        }
+        right={<IconButton icon="eye-off-outline" label="Pulsante antipanico" onPress={panic} />}
       />
 
       {!loaded ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
+        <View style={styles.list}>
+          <SkeletonGrid columns={columns} cardWidth={cardWidth} gap={GAP} />
         </View>
       ) : (
         <FlatList
           key={`grid-${columns}`}
-          data={visible}
+          data={data}
           numColumns={columns}
-          keyExtractor={(c) => c.id}
+          keyExtractor={(c) => c?.id ?? 'importing'}
           ListHeaderComponent={header}
           columnWrapperStyle={columns > 1 ? styles.row : undefined}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 110 }]}
+          contentContainerStyle={[styles.list, styles.listBottom]}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => <ComicCard comic={item} width={cardWidth} onPress={onPress} onLongPress={onLongPress} />}
+          keyboardDismissMode="on-drag"
+          renderItem={({ item }) =>
+            item ? (
+              <ComicCard comic={item} width={cardWidth} onPress={onPress} onLongPress={onLongPress} />
+            ) : (
+              <SkeletonCard width={cardWidth} />
+            )
+          }
           ListEmptyComponent={
             error ? (
               <EmptyState icon="alert-circle-outline" title="Libreria non disponibile" subtitle={error} />
@@ -205,10 +219,10 @@ export default function LibraryScreen() {
               <EmptyState
                 icon="library-outline"
                 title="La tua libreria è vuota"
-                subtitle="Importa file .cbz, .cbr, .cb7 o .zip dalla memoria del telefono. Puoi anche aprirli da un'altra app e scegliere ComicVault."
+                subtitle="Importa fumetti (CBZ, CBR, CB7, CBT, PDF) o intere cartelle di immagini. Puoi anche aprirli da un'altra app e scegliere ComicVault."
               >
                 <View style={styles.emptyBtn}>
-                  <PrimaryButton label="Importa fumetti" icon="add" onPress={importFiles} />
+                  <PrimaryButton label="Aggiungi fumetti" icon="add" onPress={openAddMenu} />
                 </View>
               </EmptyState>
             ) : (
@@ -218,34 +232,14 @@ export default function LibraryScreen() {
         />
       )}
 
-      <Pressable
-        onPress={importFiles}
-        accessibilityRole="button"
-        accessibilityLabel="Importa fumetti"
-        style={({ pressed }) => [
-          styles.fab,
-          { backgroundColor: colors.primary, bottom: insets.bottom + 24, opacity: pressed ? 0.85 : 1 },
-        ]}
-      >
-        <Ionicons name="add" size={32} color={colors.onPrimary} />
-      </Pressable>
+      <Fab icon="add" label="Aggiungi" onPress={openAddMenu} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerContent: { gap: spacing.md, paddingBottom: spacing.md },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    height: 46,
-  },
-  searchInput: { flex: 1, fontSize: 15.5 },
   section: { gap: spacing.sm },
   sectionTitle: { fontSize: 17, fontWeight: '800' },
   continueList: { gap: GAP },
@@ -255,20 +249,7 @@ const styles = StyleSheet.create({
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   sortText: { fontSize: 13.5, fontWeight: '700' },
   list: { paddingHorizontal: PAD, paddingTop: spacing.xs },
+  listBottom: { paddingBottom: 110 },
   row: { gap: GAP, marginBottom: spacing.lg },
   emptyBtn: { alignSelf: 'stretch', marginTop: spacing.md },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-  },
 });

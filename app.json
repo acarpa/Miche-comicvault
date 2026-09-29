@@ -2,37 +2,74 @@
   "expo": {
     "name": "ComicVault",
     "slug": "comicvault",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "comicvault",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#0E0E11",
+    "backgroundColor": "#130C1F",
     "android": {
       "package": "com.miche.comicvault",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#15151A"
+        "backgroundColor": "#130C1F"
       },
       "predictiveBackGestureEnabled": false,
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": ["DEFAULT"],
+          "category": [
+            "DEFAULT"
+          ],
           "data": [
-            { "scheme": "content", "mimeType": "application/vnd.comicbook+zip" },
-            { "scheme": "content", "mimeType": "application/vnd.comicbook-rar" },
-            { "scheme": "content", "mimeType": "application/x-cbz" },
-            { "scheme": "content", "mimeType": "application/x-cbr" },
-            { "scheme": "content", "mimeType": "application/x-cb7" },
-            { "scheme": "content", "mimeType": "application/zip" },
-            { "scheme": "content", "mimeType": "application/x-rar-compressed" },
-            { "scheme": "content", "mimeType": "application/vnd.rar" },
-            { "scheme": "content", "mimeType": "application/x-7z-compressed" },
-            { "scheme": "content", "mimeType": "application/octet-stream" }
+            {
+              "scheme": "content",
+              "mimeType": "application/vnd.comicbook+zip"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/vnd.comicbook-rar"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/x-cbz"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/x-cbr"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/x-cb7"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/pdf"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/zip"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/x-rar-compressed"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/vnd.rar"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/x-7z-compressed"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/octet-stream"
+            }
           ]
         }
-      ]
+      ],
+      "versionCode": 2
     },
     "plugins": [
       "expo-router",
@@ -50,7 +87,10 @@
               "application/x-rar-compressed",
               "application/vnd.rar",
               "application/x-7z-compressed",
-              "application/octet-stream"
+              "application/octet-stream",
+              "application/pdf",
+              "image/*",
+              "video/*"
             ],
             "multipleShareMimeTypes": [
               "application/vnd.comicbook+zip",
@@ -61,7 +101,10 @@
               "application/x-rar-compressed",
               "application/vnd.rar",
               "application/x-7z-compressed",
-              "application/octet-stream"
+              "application/octet-stream",
+              "application/pdf",
+              "image/*",
+              "video/*"
             ]
           }
         }
@@ -70,6 +113,13 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "ComicVault usa il riconoscimento per sbloccare la tua libreria."
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
         }
       ],
       "./plugins/withAndroidBuildSettings"

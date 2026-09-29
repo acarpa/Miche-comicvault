@@ -1,17 +1,18 @@
 /**
- * Importazione di un fumetto:
- * 1. il modulo nativo apre l'archivio (CBZ/CBR/CB7/...) e salva le pagine come file numerati
- * 2. si crea una copertina piccola (per la griglia)
- * 3. si salva la scheda nel database
+ * Importazione:
+ * 1. si riconosce il tipo di file dal contenuto (fumetto, GIF/immagine/video, backup)
+ * 2. fumetti: il modulo nativo apre l'archivio (CBZ/CBR/CB7/CBT/PDF) e salva le pagine come file numerati
+ * 3. si crea una copertina piccola (per la griglia) e si salva la scheda nel database
  */
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-import ComicArchive from '../../modules/comic-archive';
-import type { Comic, PageInfo } from '@/types';
+import ComicArchive, { type DetectedType, type ExtractResult } from '../../modules/comic-archive';
+import type { Comic, MediaKind, PageInfo } from '@/types';
 import { fileNameExists, insertComic } from './db';
-import { createId, titleFromFileName } from './format';
+import { createId, isVaultFileName, mediaKindFromName, titleFromFileName } from './format';
 import { comicDir, comicDirPrefix } from './paths';
+import { parseSeriesInfo } from './series';
 
 export interface ImportSource {
   /** file:// oppure content:// */
@@ -36,30 +37,93 @@ export async function resolveFileName(source: ImportSource): Promise<string> {
   } catch {
     // ignora: usiamo il nome dall'URI
   }
-  const last = decodeURIComponent(source.uri.split('/').pop() ?? '');
-  return last || 'fumetto.cbz';
+  let last = source.uri.split('/').pop() ?? '';
+  try {
+    last = decodeURIComponent(last);
+  } catch {
+    // lascia com'è
+  }
+  last = last.split('/').pop() ?? last;
+  if (last.includes(':')) last = last.slice(last.lastIndexOf(':') + 1);
+  return last || 'file';
 }
 
-export async function importComic(source: ImportSource, opts: { allowDuplicates?: boolean } = {}): Promise<Comic> {
+export type Destination = { kind: 'comic' } | { kind: 'media'; media: MediaKind } | { kind: 'vault' };
+
+/**
+ * Dove va un file: nella libreria, nei media o è un backup da ripristinare.
+ * Si guarda il contenuto (i primi byte); il nome serve solo se il contenuto non dice nulla.
+ */
+export async function classify(uri: string, name: string): Promise<Destination> {
+  if (isVaultFileName(name)) return { kind: 'vault' };
+  let detected: DetectedType | null = null;
+  try {
+    detected = await ComicArchive.detectType(uri);
+  } catch {
+    detected = null;
+  }
+  if (detected === 'gif') return { kind: 'media', media: 'gif' };
+  if (detected === 'image') return { kind: 'media', media: 'image' };
+  if (detected === 'video') return { kind: 'media', media: 'video' };
+  if (detected && detected !== 'unknown') return { kind: 'comic' };
+  const byName = mediaKindFromName(name);
+  if (byName) return { kind: 'media', media: byName };
+  return { kind: 'comic' }; // ci prova l'estrattore, che in caso di errore spiega il motivo
+}
+
+export interface ComicMeta {
+  title?: string;
+  series?: string;
+  chapter?: number | null;
+}
+
+export async function importComic(
+  source: ImportSource,
+  opts: { allowDuplicates?: boolean; meta?: ComicMeta } = {},
+): Promise<Comic> {
   const fileName = await resolveFileName(source);
   if (!opts.allowDuplicates && (await fileNameExists(fileName))) throw new DuplicateError(fileName);
+  return createComic(fileName, opts.meta ?? {}, (dir) => ComicArchive.extractImages(source.uri, dir.uri));
+}
 
+/** Una cartella di immagini (es. un capitolo di webtoon scaricato) diventa un fumetto. */
+export async function importImageSet(
+  label: string,
+  files: { uri: string; name: string }[],
+  meta: ComicMeta = {},
+): Promise<Comic> {
+  if (await fileNameExists(label)) throw new DuplicateError(label);
+  return createComic(label, meta, (dir) =>
+    ComicArchive.importImages(
+      files.map((f) => f.uri),
+      files.map((f) => f.name),
+      dir.uri,
+    ),
+  );
+}
+
+async function createComic(
+  fileName: string,
+  meta: ComicMeta,
+  extract: (dir: Directory) => Promise<ExtractResult>,
+): Promise<Comic> {
   const id = createId();
   const dir = comicDir(id);
   dir.create({ intermediates: true, idempotent: true });
 
   try {
-    const result = await ComicArchive.extractImages(source.uri, dir.uri);
+    const result = await extract(dir);
     if (result.pages.length === 0) {
       throw new Error('Nel file non ci sono immagini: non sembra un fumetto.');
     }
     const pages: PageInfo[] = result.pages.map((p) => ({ n: p.name, w: p.width, h: p.height }));
     // Se la miniatura non si riesce a creare, si usa direttamente la prima pagina.
     const cover = (await createCover(id, dir, pages[0])) ?? pages[0].n;
+    const parsed = parseSeriesInfo(fileName);
 
     const comic: Comic = {
       id,
-      title: titleFromFileName(fileName),
+      title: meta.title?.trim() || titleFromFileName(fileName),
       fileName,
       format: result.format,
       pageCount: pages.length,
@@ -72,6 +136,10 @@ export async function importComic(source: ImportSource, opts: { allowDuplicates?
       readingMode: null,
       cover,
       pages,
+      series: meta.series?.trim() ?? parsed.series,
+      chapter: meta.chapter !== undefined ? meta.chapter : parsed.chapter,
+      author: '',
+      tags: [],
     };
     await insertComic(comic);
     return comic;
@@ -101,18 +169,22 @@ async function createCover(id: string, dir: Directory, first: PageInfo): Promise
     const temp = new File(saved.uri);
     const target = new File(dir, 'cover.jpg');
     if (target.exists) target.delete();
-    await temp.move(target);
+    temp.move(target);
     return 'cover.jpg';
   } catch {
     return null; // senza copertina si usa la prima pagina
   }
 }
 
+/** true se il file è una copia temporanea nella cache dell'app (non un originale dell'utente). */
+export function isTempCopy(uri: string): boolean {
+  return uri.startsWith(Paths.cache.uri);
+}
+
 /** Rimuove la copia temporanea creata dal selettore file (non tocca mai i file originali). */
 export function deleteTempCopy(uri: string) {
   // Solo file dentro la cache privata dell'app: gli originali dell'utente non si toccano mai.
-  const cache = Paths.cache.uri;
-  if (!uri.startsWith(cache)) return;
+  if (!isTempCopy(uri)) return;
   try {
     const f = new File(uri);
     if (f.exists) f.delete();

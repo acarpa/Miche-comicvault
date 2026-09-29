@@ -35,7 +35,7 @@ export function ImportBanner() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, borderRadius: radius.md, padding: spacing.md, gap: 10, borderWidth: StyleSheet.hairlineWidth },
+  wrap: { borderRadius: radius.md, padding: spacing.md, gap: 10, borderWidth: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   body: { flex: 1 },
   title: { fontSize: 14.5, fontWeight: '700' },

@@ -210,6 +210,24 @@ export function PrimaryButton({
   );
 }
 
+/** Pulsante tondo flottante (in basso a destra). */
+export function Fab({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.fab,
+        { backgroundColor: colors.primary, shadowColor: colors.primary, transform: [{ scale: pressed ? 0.92 : 1 }] },
+      ]}
+    >
+      <Ionicons name={icon} size={30} color={colors.onPrimary} />
+    </Pressable>
+  );
+}
+
 export function Divider() {
   const { colors } = useTheme();
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />;
@@ -248,4 +266,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   buttonText: { fontSize: 16, fontWeight: '700' },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 18,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
 });
