@@ -24,6 +24,17 @@ export async function pickAndImport() {
   showImportReport(report);
 }
 
+/** File ricevuti da un'altra app ("Apri con" o "Condividi"). */
+export async function importFromOtherApp(sources: { uri: string; name?: string | null }[]) {
+  if (sources.length === 0) return;
+  try {
+    const report = await useImport.getState().enqueue(sources);
+    showImportReport(report);
+  } catch (e) {
+    Alert.alert('Importazione non riuscita', e instanceof Error ? e.message : String(e));
+  }
+}
+
 export function showImportReport(report: ImportReport) {
   const message = describeReport(report);
   if (report.failed.length > 0) {
